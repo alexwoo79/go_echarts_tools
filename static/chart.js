@@ -68,6 +68,25 @@
   const granularity = options.timeGranularity || "month";
   const chartTheme = selectedTheme;
   const echartsTheme = chartTheme === "default" ? null : chartTheme;
+  const dark = !!options.darkTheme || chartTheme === "dark";
+  const surfaceTheme = {
+    panelBg: dark ? "rgba(15,23,42,0.96)" : "rgba(255,255,255,0.98)",
+    panelBorder: dark ? "rgba(148,163,184,0.30)" : "#d6deea",
+    panelText: dark ? "#e2e8f0" : "#1e2d41",
+    panelMuted: dark ? "#94a3b8" : "#64748b",
+    panelShadow: dark ? "0 14px 28px rgba(2,8,23,0.34)" : "0 12px 24px rgba(15,23,42,0.16)",
+    toolHintBg: dark ? "rgba(15,23,42,0.92)" : "rgba(255,255,255,0.94)",
+    toolHintText: dark ? "#e2e8f0" : "#1e2d41"
+  };
+
+  function escapeHtml(value) {
+    return String(value == null ? "" : value)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/\"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
 
   function floorToGranularity(ts, g) {
     const d = new Date(ts);
@@ -120,7 +139,6 @@
   const timeGridCfg = timeGridByGranularity[granularity] || timeGridByGranularity.month;
 
   const gantt = echarts.init(document.getElementById("gantt"), echartsTheme);
-  const dark = !!options.darkTheme || chartTheme === "dark";
   const canvasBgByTheme = {
     default: dark ? "#10213b" : "#ffffff",
     macarons: dark ? "#1e2733" : "#fff7fb",
@@ -135,6 +153,15 @@
 
   function barHeightForRow(rowType) {
     return rowType === "project" ? 36 : 24;
+  }
+
+  function visualBarHeight(laneHeight, preferredHeight) {
+    const fallback = laneHeight * 0.7;
+    return Math.min(preferredHeight || fallback, laneHeight * 0.92);
+  }
+
+  function barRadiusForRow(rowType) {
+    return rowType === "project" ? 6 : 4;
   }
 
   function readableTextColor(bgHex, isDarkTheme) {
@@ -259,8 +286,8 @@
     const s = api.coord([api.value(1), y]);
     const e = api.coord([api.value(2), y]);
     const laneHeight = api.size([0, 1])[1];
-    const preferred = api.value(6) || (laneHeight * 0.7);
-    const h = Math.min(preferred, laneHeight * 0.92);
+    const preferred = api.value(6);
+    const h = visualBarHeight(laneHeight, preferred);
     const rect = echarts.graphic.clipRectByRect({
       x: s[0],
       y: s[1] - h / 2,
@@ -278,6 +305,7 @@
 
     const progress = Math.max(0, Math.min(1, Number(api.value(9)) || 0));
     const rowType = api.value(10);
+    const radius = barRadiusForRow(rowType);
     const detail = api.value(8) || api.value(5) || "";
     const progressWidth = Math.max(2, rect.width * progress);
     const barFill = api.value(3);
@@ -291,7 +319,7 @@
           y: rect.y,
           width: rect.width,
           height: rect.height,
-          r: rowType === "project" ? 6 : 4
+          r: radius
         },
         style: api.style({
           fill: barFill,
@@ -305,7 +333,7 @@
           y: rect.y,
           width: progressWidth,
           height: rect.height,
-          r: rowType === "project" ? 6 : 4
+          r: radius
         },
         style: {
           fill: dark ? "rgba(255,255,255,0.16)" : "rgba(255,255,255,0.32)"
@@ -370,7 +398,7 @@
   const planData = rows
     .map((r, idx) => ({ idx, start: r.planStart, end: r.planEnd, task: r.task, rowType: r.rowType }))
     .filter((r) => r.start && r.end)
-    .map((r) => ({ value: [r.idx, r.start, r.end, barHeightForRow(r.rowType)], task: r.task }));
+    .map((r) => ({ value: [r.idx, r.start, r.end, barHeightForRow(r.rowType), r.rowType], task: r.task }));
 
   const milestoneData = rows
     .map((r, idx) => ({ idx, date: r.milestone, name: r.milestoneName, task: r.task }))
@@ -400,10 +428,12 @@
           borderWidth: 2,
           shadowBlur: 6,
           shadowColor: dark ? "rgba(255,255,255,0.18)" : "rgba(15,23,42,0.15)",
-          textFill: dark ? "#f1f5f9" : "#0f172a",
-          textBackgroundColor: dark ? "rgba(15,23,59,0.88)" : "rgba(255,255,255,0.92)",
-          textBorderRadius: 4,
-          textPadding: [3, 7]
+          textFill: surfaceTheme.toolHintText,
+          textBackgroundColor: surfaceTheme.toolHintBg,
+          textBorderRadius: 8,
+          textPadding: [5, 8],
+          textBorderColor: surfaceTheme.panelBorder,
+          textBorderWidth: 1
         }
       },
       feature: {
@@ -421,47 +451,43 @@
           title: "数据视图",
           lang: ["数据视图", "关闭", "刷新"],
           readOnly: true,
-          backgroundColor: dark ? "#1e293b" : "#ffffff",
-          textareaColor: dark ? "#0f172a" : "#f8fafc",
-          textareaBorderColor: dark ? "#334155" : "#cbd5e1",
-          textColor: dark ? "#e2e8f0" : "#1e293b",
+          backgroundColor: dark ? "#0f172a" : "#f8fbff",
+          textareaColor: dark ? "#0f172a" : "#ffffff",
+          textareaBorderColor: dark ? "rgba(148,163,184,0.24)" : "#d6deea",
+          textColor: dark ? "#e2e8f0" : "#1e2d41",
           buttonColor: "#2563eb",
           buttonTextColor: "#ffffff",
           optionToContent: function () {
             var taskList = (window.GANTT_DATA && window.GANTT_DATA.tasks) || [];
-            var bg      = dark ? "#1e293b" : "#ffffff";
-            var hdrBg   = dark ? "#0f172a" : "#f1f5f9";
-            var border  = dark ? "#334155" : "#e2e8f0";
-            var txt     = dark ? "#e2e8f0" : "#1e293b";
-            var muted   = dark ? "#94a3b8" : "#64748b";
-            var alt     = dark ? "#162032" : "#f8fafc";
             var cols    = ["#", "任务名", "项目", "开始日期", "结束日期", "周期(天)", "进度", "负责人", "说明"];
-            var th      = "padding:7px 10px;border:1px solid " + border + ";white-space:nowrap;font-weight:600;";
-            var tdBase  = "padding:5px 10px;border:1px solid " + border + ";";
-            var html = '<div style="padding:16px 20px;overflow:auto;max-height:520px;">';
-            html += '<table style="width:100%;border-collapse:collapse;font-size:12px;color:' + txt + ';">';
-            html += '<thead><tr style="background:' + hdrBg + ';">';
-            cols.forEach(function (h) { html += '<th style="' + th + '">' + h + '</th>'; });
+            var html = '<div class="data-view-surface' + (dark ? ' data-view-dark' : '') + '">';
+            html += '<div class="data-view-head">';
+            html += '<h3 class="data-view-title">数据预览</h3>';
+            html += '<div class="data-view-meta">共 ' + taskList.length + ' 条记录</div>';
+            html += '</div>';
+            html += '<div class="data-view-wrap">';
+            html += '<table class="preview-table">';
+            html += '<thead><tr>';
+            cols.forEach(function (h) { html += '<th>' + escapeHtml(h) + '</th>'; });
             html += '</tr></thead><tbody>';
             taskList.forEach(function (t, i) {
-              var rowBg = i % 2 === 0 ? bg : alt;
               var pct = t.progress != null ? Math.round(t.progress * 100) + "%" : "—";
               var sd  = t.startISO ? new Date(t.startISO).toLocaleDateString("zh-CN") : "—";
               var ed  = t.endISO  ? new Date(t.endISO).toLocaleDateString("zh-CN")  : "—";
-              var desc = (t.description || "").replace(/"/g, "&quot;");
-              html += '<tr style="background:' + rowBg + ';">';
-              html += '<td style="' + tdBase + 'color:' + muted + ';text-align:center;">' + (i + 1) + '</td>';
-              html += '<td style="' + tdBase + 'font-weight:500;">' + (t.taskName || "") + '</td>';
-              html += '<td style="' + tdBase + 'color:' + muted + ';">' + (t.project || "—") + '</td>';
-              html += '<td style="' + tdBase + 'white-space:nowrap;">' + sd + '</td>';
-              html += '<td style="' + tdBase + 'white-space:nowrap;">' + ed + '</td>';
-              html += '<td style="' + tdBase + 'text-align:center;">' + (t.durationDays || "—") + '</td>';
-              html += '<td style="' + tdBase + 'text-align:center;">' + pct + '</td>';
-              html += '<td style="' + tdBase + 'color:' + muted + ';">' + (t.owner || "—") + '</td>';
-              html += '<td style="' + tdBase + 'max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + desc + '">' + (t.description || "—") + '</td>';
+              var desc = escapeHtml(t.description || "—");
+              html += '<tr>';
+              html += '<td style="text-align:center;color:' + (dark ? '#94a3b8' : '#64748b') + ';">' + (i + 1) + '</td>';
+              html += '<td style="font-weight:600;">' + escapeHtml(t.taskName || "") + '</td>';
+              html += '<td style="color:' + (dark ? '#94a3b8' : '#64748b') + ';">' + escapeHtml(t.project || "—") + '</td>';
+              html += '<td>' + escapeHtml(sd) + '</td>';
+              html += '<td>' + escapeHtml(ed) + '</td>';
+              html += '<td style="text-align:center;">' + escapeHtml(t.durationDays || "—") + '</td>';
+              html += '<td style="text-align:center;">' + escapeHtml(pct) + '</td>';
+              html += '<td style="color:' + (dark ? '#94a3b8' : '#64748b') + ';">' + escapeHtml(t.owner || "—") + '</td>';
+              html += '<td title="' + desc + '">' + desc + '</td>';
               html += '</tr>';
             });
-            html += '</tbody></table></div>';
+            html += '</tbody></table></div></div>';
             return html;
           }
         },
@@ -539,12 +565,12 @@
       show: true,
       trigger: "axis",
       axisPointer: { type: "line", snap: false, label: { show: true } },
-      backgroundColor: dark ? "rgba(16,33,59,0.98)" : "rgba(255,255,255,0.98)",
-      borderColor: dark ? "#365378" : "#c7d4e6",
+      backgroundColor: surfaceTheme.panelBg,
+      borderColor: surfaceTheme.panelBorder,
       borderWidth: 1,
-      padding: [10, 12],
-      extraCssText: "box-shadow: 0 8px 24px rgba(15,23,42,0.18); border-radius: 10px;",
-      textStyle: { color: dark ? "#f8fafc" : "#111827" },
+      padding: [12, 14],
+      extraCssText: "box-shadow: " + surfaceTheme.panelShadow + "; border-radius: 12px;",
+      textStyle: { color: surfaceTheme.panelText },
       formatter: function (params) {
         const p = Array.isArray(params) ? params.find((x) => x.seriesName !== "任务详情") : params;
         if (!p) {
@@ -579,7 +605,9 @@
           const s = api.coord([api.value(1), y]);
           const e = api.coord([api.value(2), y]);
           const laneHeight = api.size([0, 1])[1];
-          const h = Math.max(7, Math.min((api.value(3) || 18) - 7, laneHeight * 0.64));
+          const rowType = api.value(4);
+          const h = visualBarHeight(laneHeight, api.value(3));
+          const radius = barRadiusForRow(rowType);
           const rect = echarts.graphic.clipRectByRect({
             x: s[0],
             y: s[1] - h / 2,
@@ -595,39 +623,53 @@
             return null;
           }
           const strokeTheme = planStrokeTheme(dark);
+          const outerLineWidth = 3;
+          const innerLineWidth = 1.5;
+          const dashPattern = rowType === "project" ? [7, 4] : [4, 3];
+          const outerOpacity = rowType === "project" ? 0.62 : 1;
+          const innerOpacity = rowType === "project" ? 0.74 : 1;
+          const inset = outerLineWidth / 2;
+          const insetRect = {
+            x: rect.x + inset,
+            y: rect.y + inset,
+            width: Math.max(1, rect.width - outerLineWidth),
+            height: Math.max(1, rect.height - outerLineWidth)
+          };
           return {
             type: "group",
             children: [
               {
                 type: "rect",
                 shape: {
-                  x: rect.x,
-                  y: rect.y,
-                  width: rect.width,
-                  height: rect.height,
-                  r: 3
+                  x: insetRect.x,
+                  y: insetRect.y,
+                  width: insetRect.width,
+                  height: insetRect.height,
+                  r: radius
                 },
                 style: {
                   fill: "transparent",
                   stroke: strokeTheme.outer,
-                  lineWidth: 3
+                  lineWidth: outerLineWidth,
+                  opacity: outerOpacity
                 },
                 silent: true
               },
               {
                 type: "rect",
                 shape: {
-                  x: rect.x,
-                  y: rect.y,
-                  width: rect.width,
-                  height: rect.height,
-                  r: 3
+                  x: insetRect.x,
+                  y: insetRect.y,
+                  width: insetRect.width,
+                  height: insetRect.height,
+                  r: radius
                 },
                 style: {
                   fill: "transparent",
                   stroke: strokeTheme.inner,
-                  lineDash: [4, 3],
-                  lineWidth: 1.5
+                  lineDash: dashPattern,
+                  lineWidth: innerLineWidth,
+                  opacity: innerOpacity
                 },
                 silent: true
               }
