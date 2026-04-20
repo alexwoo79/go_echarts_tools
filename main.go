@@ -223,29 +223,20 @@ func handleChart(c *gin.Context) {
 	renderWorkspace(c, dataset, mapping, options, tasks, stats, "")
 }
 
-func parseCSVReader(name string, reader io.Reader) (Dataset, error) {
-	csvReader := csv.NewReader(reader)
-	csvReader.FieldsPerRecord = -1
-
-	records, err := csvReader.ReadAll()
-	if err != nil {
-		return Dataset{}, fmt.Errorf("CSV 读取失败: %w", err)
-	}
-	if len(records) < 2 {
-		return Dataset{}, fmt.Errorf("CSV 至少需要一行表头和一行数据")
-	}
-
-	headers := make([]string, 0, len(records[0]))
-	for i, col := range records[0] {
+// normalizeTable trims whitespace from headers and cell values, fills blank
+// header names with "Column_N", and drops rows where every cell is empty.
+func normalizeTable(rawHeaders []string, rawRows [][]string) ([]string, [][]string) {
+	headers := make([]string, len(rawHeaders))
+	for i, col := range rawHeaders {
 		v := strings.TrimSpace(col)
 		if v == "" {
 			v = fmt.Sprintf("Column_%d", i+1)
 		}
-		headers = append(headers, v)
+		headers[i] = v
 	}
 
-	rows := make([][]string, 0, len(records)-1)
-	for _, row := range records[1:] {
+	rows := make([][]string, 0, len(rawRows))
+	for _, row := range rawRows {
 		normalized := make([]string, len(headers))
 		nonEmpty := false
 		for i := range headers {
@@ -260,11 +251,25 @@ func parseCSVReader(name string, reader io.Reader) (Dataset, error) {
 			rows = append(rows, normalized)
 		}
 	}
+	return headers, rows
+}
 
+func parseCSVReader(name string, reader io.Reader) (Dataset, error) {
+	csvReader := csv.NewReader(reader)
+	csvReader.FieldsPerRecord = -1 // allow rows with varying field counts
+
+	records, err := csvReader.ReadAll()
+	if err != nil {
+		return Dataset{}, fmt.Errorf("CSV 读取失败: %w", err)
+	}
+	if len(records) < 2 {
+		return Dataset{}, fmt.Errorf("CSV 至少需要一行表头和一行数据")
+	}
+
+	headers, rows := normalizeTable(records[0], records[1:])
 	if len(rows) == 0 {
 		return Dataset{}, fmt.Errorf("上传文件没有可用数据行")
 	}
-
 	return Dataset{ID: newDatasetID(), Name: name, Headers: headers, Rows: rows}, nil
 }
 
@@ -306,36 +311,10 @@ func parseXLSXReader(name string, reader io.Reader) (Dataset, error) {
 		return Dataset{}, fmt.Errorf("Excel 数据不足，至少需要一行表头和一行数据")
 	}
 
-	headers := make([]string, len(rows[0]))
-	for i, col := range rows[0] {
-		v := strings.TrimSpace(col)
-		if v == "" {
-			v = fmt.Sprintf("Column_%d", i+1)
-		}
-		headers[i] = v
-	}
-
-	dataRows := make([][]string, 0, len(rows)-1)
-	for _, row := range rows[1:] {
-		normalized := make([]string, len(headers))
-		nonEmpty := false
-		for i := range headers {
-			if i < len(row) {
-				normalized[i] = strings.TrimSpace(row[i])
-				if normalized[i] != "" {
-					nonEmpty = true
-				}
-			}
-		}
-		if nonEmpty {
-			dataRows = append(dataRows, normalized)
-		}
-	}
-
+	headers, dataRows := normalizeTable(rows[0], rows[1:])
 	if len(dataRows) == 0 {
 		return Dataset{}, fmt.Errorf("Excel 没有可用数据行")
 	}
-
 	return Dataset{ID: newDatasetID(), Name: name, Headers: headers, Rows: dataRows}, nil
 }
 
