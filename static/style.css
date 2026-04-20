@@ -56,7 +56,12 @@
   top: 12px;
   align-self: start;
   height: calc(100vh - 24px);
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  scrollbar-gutter: stable;
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: var(--radius-panel);
@@ -105,6 +110,8 @@
   border: 1px solid var(--line-soft);
   border-radius: var(--radius-card);
   padding: var(--space-card);
+  width: 100%;
+  box-sizing: border-box;
   background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
   box-shadow: var(--shadow-card);
 }
@@ -157,6 +164,30 @@ select {
   padding: 8px 10px;
   background: #fbfdff;
   min-height: 38px;
+}
+
+.mapping-form select,
+.mapping-form input[type="text"] {
+  border: none;
+  border-radius: var(--radius-control);
+  background: #f1f5fb;
+  box-shadow: inset 0 1px 3px rgba(14, 30, 58, 0.07);
+  padding: 7px 10px;
+  min-height: 0;
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
+  outline: none;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.mapping-form select:focus,
+.mapping-form input[type="text"]:focus {
+  background: #e8f0fc;
+  box-shadow: inset 0 1px 3px rgba(14, 30, 58, 0.07), 0 0 0 2px rgba(91, 141, 230, 0.28);
+  outline: none;
 }
 
 .upload-form .btn {
@@ -213,28 +244,29 @@ select {
 }
 
 .mapping-field {
-  border: 1px solid transparent;
-  border-radius: 10px;
-  padding: 8px;
-  transition: border-color 0.16s ease, background 0.16s ease;
+  border: none;
+  border-radius: 0;
+  padding: 4px 0;
+  transition: none;
 }
 
 .mapping-field.is-required,
 .mapping-check.is-required {
-  border-color: #f2b09f;
-  background: #fff4f0;
+  border-left: 3px solid #f2a58e;
+  padding-left: 14px;
+  background: transparent;
 }
 
 .mapping-field.is-recommended,
 .mapping-check.is-recommended {
-  border-color: #b8d0f8;
-  background: #f2f7ff;
+  border-left: 3px solid #a8c8f8;
+  padding-left: 14px;
+  background: transparent;
 }
 
 .mapping-check {
-  border: 1px solid transparent;
-  border-radius: 10px;
-  padding: 6px 8px;
+  border: none;
+  padding: 8px 4px 8px 10px;
 }
 
 .field-guide {
@@ -292,7 +324,29 @@ select {
 }
 
 .mapping-shell {
-  padding: var(--space-card);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.mapping-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 0 0 10px;
+  padding: 0 2px;
+  color: var(--heading);
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.mapping-section-head small {
+  color: #70839e;
+  font-size: 12px;
+  font-weight: 500;
 }
 
 details.mapping-card {
@@ -348,19 +402,35 @@ details.mapping-card>summary small {
   border: 1px solid var(--line-soft);
   border-radius: 12px;
   background: rgba(247, 250, 255, 0.9);
+  padding-bottom: 10px;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.config-group:focus-within {
+  border-color: var(--primary-border);
+  box-shadow: 0 0 0 2px rgba(91, 141, 230, 0.12);
 }
 
 .config-group+.config-group {
-  margin-top: 10px;
+  margin-top: 8px;
 }
 
 .config-group>summary {
   cursor: pointer;
   list-style: none;
-  padding: 10px 12px;
-  font-size: 14px;
-  font-weight: 700;
+  padding: 12px 12px;
+  min-height: 44px;
+  font-size: 13px;
+  font-weight: 600;
   color: var(--heading);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  user-select: none;
+  line-height: 1.4;
+  outline: none;
+  border-radius: 12px;
 }
 
 .config-group>summary::-webkit-details-marker {
@@ -368,13 +438,69 @@ details.mapping-card>summary small {
 }
 
 .config-group>summary::after {
-  content: "+";
-  float: right;
-  color: #627896;
+  content: "";
+  display: block;
+  flex-shrink: 0;
+  width: 0;
+  height: 0;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 5px solid #8097b4;
+  transition: transform 0.18s ease;
+  margin-top: 1px;
 }
 
 .config-group[open]>summary::after {
-  content: "-";
+  transform: rotate(180deg);
+}
+
+.mapping-shell .config-group > :not(summary) {
+  margin-left: 12px;
+  margin-right: 12px;
+}
+
+.mapping-shell .config-group > :not(summary):first-of-type {
+  margin-top: 8px;
+}
+
+.mapping-shell .config-group > :not(summary) + :not(summary) {
+  margin-top: 7px;
+}
+
+.mapping-shell #xy_mapping_group,
+.mapping-shell #pie_mapping_group,
+.mapping-shell #relation_mapping_group,
+.mapping-shell #dynamic_y_fields {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.fields-2col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.fields-2col .mapping-field {
+  padding: 6px;
+}
+
+.mapping-shell .config-group > :last-child {
+  margin-bottom: 10px;
+}
+
+.mapping-shell .config-group .hint {
+  margin-top: 6px;
+  margin-bottom: 0;
+}
+
+.mapping-submit {
+  margin-top: 10px;
+  font-weight: 600;
+  background: linear-gradient(135deg, var(--primary), var(--primary-2));
+  border-color: var(--primary-2);
+  box-shadow: 0 6px 14px rgba(13, 110, 253, 0.16);
 }
 
 .config-group-body {
@@ -468,6 +594,8 @@ details.mapping-card>summary small {
   margin-top: 12px;
   padding-top: 12px;
   border-top: 1px solid var(--line-subtle);
+  display: flex;
+  flex-direction: column;
 }
 
 .checks {
@@ -814,7 +942,10 @@ th {
 
 #ganttPanel:fullscreen,
 #ganttPanel:-webkit-full-screen,
-#ganttPanel:-moz-full-screen {
+#ganttPanel:-moz-full-screen,
+#vizPanel:fullscreen,
+#vizPanel:-webkit-full-screen,
+#vizPanel:-moz-full-screen {
   background: var(--bg, #ffffff);
   padding: 16px 20px;
   display: flex;
@@ -824,10 +955,13 @@ th {
 
 #ganttPanel:fullscreen .chart-lg,
 #ganttPanel:-webkit-full-screen .chart-lg,
-#ganttPanel:-moz-full-screen .chart-lg {
-  flex: 1;
-  height: 0;
-  /* flex child grows to fill remaining space */
+#ganttPanel:-moz-full-screen .chart-lg,
+#vizPanel:fullscreen .chart-lg,
+#vizPanel:-webkit-full-screen .chart-lg,
+#vizPanel:-moz-full-screen .chart-lg {
+  flex: 1 1 0;
+  height: 0 !important;
+  min-height: 0;
 }
 
 .chart-sm {

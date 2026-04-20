@@ -531,10 +531,16 @@ func buildItems(dataset model.Dataset, cfg Config) (map[string]any, error) {
 
 func buildRadar(dataset model.Dataset, cfg Config) (map[string]any, error) {
 	index := headerIndex(dataset.Headers)
-	yCols := selectedYCols(cfg)
-	if len(yCols) < 2 {
-		return nil, fmt.Errorf("雷达图至少需要值列1、值列2")
+	nameIdx := idx(index, cfg.NameCol)
+	if nameIdx < 0 {
+		return nil, fmt.Errorf("请为雷达图选择指标名称列（name_col）")
 	}
+
+	yCols := selectedYCols(cfg)
+	if len(yCols) < 1 {
+		return nil, fmt.Errorf("雷达图至少需要一个数值列")
+	}
+
 	yIndices := make([]int, 0, len(yCols))
 	resolvedYCols := make([]string, 0, len(yCols))
 	for _, col := range yCols {
@@ -544,22 +550,25 @@ func buildRadar(dataset model.Dataset, cfg Config) (map[string]any, error) {
 			resolvedYCols = append(resolvedYCols, col)
 		}
 	}
-	if len(yIndices) < 2 {
-		return nil, fmt.Errorf("雷达图至少需要两个可用指标列")
+	if len(yIndices) < 1 {
+		return nil, fmt.Errorf("未找到可用的数值列")
 	}
+
+	// Build indicators from name_col and collect all values for each series
 	indicators := []map[string]any{}
-	values := []float64{}
-	appendIndicator := func(label string, val float64) {
-		maxVal := math.Ceil(val*1.2 + 1)
-		if maxVal < 10 {
-			maxVal = 10
-		}
-		indicators = append(indicators, map[string]any{"name": label, "max": maxVal})
-		values = append(values, val)
+	seriesDataList := make([][]float64, len(yIndices)) // seriesDataList[i] holds values for Y column i
+	for i := range seriesDataList {
+		seriesDataList[i] = make([]float64, 0)
 	}
-	sums := make([]float64, len(yIndices))
-	count := 0.0
+
+	maxVals := make([]float64, len(yIndices)) // Track max per column for better scaling
+
 	for _, row := range dataset.Rows {
+		name := strings.TrimSpace(data.Cell(row, nameIdx))
+		if name == "" {
+			continue
+		}
+
 		rowValues := make([]float64, len(yIndices))
 		valid := true
 		for i, colIdx := range yIndices {
@@ -569,27 +578,69 @@ func buildRadar(dataset model.Dataset, cfg Config) (map[string]any, error) {
 				break
 			}
 			rowValues[i] = v
+			if rowValues[i] > maxVals[i] {
+				maxVals[i] = rowValues[i]
+			}
 		}
 		if !valid {
 			continue
 		}
-		for i := range rowValues {
-			sums[i] += rowValues[i]
+
+		// Add indicator
+		indicators = append(indicators, map[string]any{"name": name})
+
+		// Append values to each series
+		for i, val := range rowValues {
+			seriesDataList[i] = append(seriesDataList[i], val)
 		}
-		count++
 	}
-	if count == 0 {
-		return nil, fmt.Errorf("未解析到可用雷达图数据，请确认值列为数值")
+
+	if len(indicators) == 0 {
+		return nil, fmt.Errorf("未解析到可用的指标行数据")
 	}
+
+	// Calculate max for each indicator and update indicators
+	for i := range indicators {
+		// Find the max value at this position across all series
+		maxAtIdx := 0.0
+		for seriesIdx := range seriesDataList {
+			if i < len(seriesDataList[seriesIdx]) && seriesDataList[seriesIdx][i] > maxAtIdx {
+				maxAtIdx = seriesDataList[seriesIdx][i]
+			}
+		}
+		maxVal := math.Ceil(maxAtIdx*1.2 + 1)
+		if maxVal < 10 {
+			maxVal = 10
+		}
+		indicators[i]["max"] = maxVal
+	}
+
+	// Build series data: each Y column becomes a data series
+	series := make([]map[string]any, len(yIndices))
+	seriesNames := []string{cfg.SeriesName, cfg.Series2Name, cfg.Series3Name}
 	for i, col := range resolvedYCols {
-		appendIndicator(col, sums[i]/count)
+		seriesName := col
+		if i < len(seriesNames) && strings.TrimSpace(seriesNames[i]) != "" {
+			seriesName = seriesNames[i]
+		}
+
+		series[i] = map[string]any{
+			"name": seriesName,
+			"type": "radar",
+			"data": []map[string]any{
+				{
+					"value": seriesDataList[i],
+					"name":  seriesName,
+				},
+			},
+		}
 	}
+
 	return map[string]any{
 		"kind":       cfg.ChartKind,
 		"title":      map[string]any{"text": cfg.Title, "subtext": cfg.SubTitle},
-		"seriesName": cfg.SeriesName,
 		"indicators": indicators,
-		"values":     values,
+		"series":     series,
 	}, nil
 }
 

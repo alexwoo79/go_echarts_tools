@@ -4,11 +4,32 @@
     const selectedTheme = String(data.theme || "default").toLowerCase();
     const node = document.getElementById("vizChart");
     const vizPanel = document.getElementById("vizPanel");
+    const layoutUtils = window.ChartLayoutUtils;
+    const themeShared = window.EChartsThemeShared;
+    const themeProfile = themeShared
+        ? themeShared.getThemeProfile(selectedTheme)
+        : {
+            name: "default",
+            palette: ["#c23531", "#2f4554", "#61a0a8", "#d48265", "#91c7ae", "#749f83", "#ca8622", "#bda29a", "#6e7074", "#546570", "#c4ccd3"],
+            backgroundColor: "rgba(0,0,0,0)",
+            titleColor: "#333333",
+            subtitleColor: "#aaa",
+            textColor: "#333",
+            axisLineColor: "#333",
+            axisLabelColor: "#333",
+            splitLineColor: "#ccc",
+            toolboxColor: "#999999",
+            toolboxEmphasisColor: "#666666",
+            tooltipAxisColor: "#cccccc",
+            isDark: false
+        };
     if (!node || !window.echarts) return;
 
-    const chart = echarts.init(node, selectedTheme === "default" ? null : selectedTheme);
+    const echartsTheme = themeShared ? themeShared.getEchartsThemeName(selectedTheme) : (selectedTheme === "default" ? null : selectedTheme);
+    const chart = echarts.init(node, echartsTheme);
     const kind = String(payload.kind || "bar").toLowerCase();
-    const dark = selectedTheme === "dark";
+    const dark = !!themeProfile.isDark;
+    const mutedTextColor = dark ? "#94a3b8" : themeProfile.subtitleColor;
     const titleData = payload.title || { text: "", subtext: "" };
     const seriesName = String(payload.seriesName || "").trim();
 
@@ -31,24 +52,30 @@
     const gridTop = legendTop + 58;
 
     const toolboxTheme = {
-        border: dark ? "#94a3b8" : "#64748b",
-        borderHover: dark ? "#e2e8f0" : "#1e293b",
+        border: dark ? "#94a3b8" : themeProfile.toolboxColor,
+        borderHover: dark ? "#e2e8f0" : themeProfile.toolboxEmphasisColor,
         fillHover: dark ? "rgba(255,255,255,0.10)" : "rgba(15,23,42,0.06)",
         shadowHover: dark ? "rgba(255,255,255,0.18)" : "rgba(15,23,42,0.15)",
-        text: dark ? "#e2e8f0" : "#1e2d41",
+        text: dark ? "#e2e8f0" : themeProfile.textColor,
         textBg: dark ? "rgba(15,23,42,0.92)" : "rgba(255,255,255,0.94)",
-        textBorder: dark ? "rgba(148,163,184,0.30)" : "#d6deea"
+        textBorder: dark ? "rgba(148,163,184,0.30)" : themeProfile.splitLineColor
     };
 
     function isFullscreenActive() {
-        return document.fullscreenElement === vizPanel
-            || document.webkitFullscreenElement === vizPanel
-            || document.mozFullScreenElement === vizPanel
-            || document.msFullscreenElement === vizPanel;
+        return layoutUtils
+            ? layoutUtils.isPanelFullscreen(vizPanel)
+            : (document.fullscreenElement === vizPanel
+                || document.webkitFullscreenElement === vizPanel
+                || document.mozFullScreenElement === vizPanel
+                || document.msFullscreenElement === vizPanel);
     }
 
     function toggleVizFullscreen() {
         if (!vizPanel) return;
+        if (layoutUtils) {
+            layoutUtils.togglePanelFullscreen(vizPanel);
+            return;
+        }
         if (isFullscreenActive()) {
             if (document.exitFullscreen) {
                 document.exitFullscreen();
@@ -80,7 +107,7 @@
         tmpDiv.style.cssText = "position:absolute;left:-9999px;top:0;width:" + w + "px;height:" + h + "px;";
         document.body.appendChild(tmpDiv);
         try {
-            const svgChart = echarts.init(tmpDiv, selectedTheme === "default" ? null : selectedTheme, { renderer: "svg", width: w, height: h });
+            const svgChart = echarts.init(tmpDiv, echartsTheme, { renderer: "svg", width: w, height: h });
             svgChart.setOption(baseOption);
 
             let svgStr;
@@ -117,11 +144,13 @@
         const bg = baseOption.backgroundColor || "#ffffff";
         const CS = "</" + "script>";
         Promise.all([
+            fetch("/static/echarts_theme_shared.js").then(function (r) { return r.text(); }),
             fetch("/static/viz.js").then(function (r) { return r.text(); }),
             fetch("https://cdn.jsdelivr.net/npm/echarts@6/dist/echarts.min.js").then(function (r) { return r.text(); })
         ]).then(function (results) {
-            const vizSrc = results[0].replace(/<\/script/gi, "<\\/script");
-            const echartsSrc = results[1].replace(/<\/script/gi, "<\\/script");
+            const themeSharedSrc = results[0].replace(/<\/script/gi, "<\\/script");
+            const vizSrc = results[1].replace(/<\/script/gi, "<\\/script");
+            const echartsSrc = results[2].replace(/<\/script/gi, "<\\/script");
             const vizData = JSON.stringify(window.VIZ_DATA || {}, null, 2);
 
             const html = [
@@ -136,6 +165,7 @@
                 "<body>",
                 "  <div id=\"vizChart\"></div>",
                 "  <script>" + echartsSrc + CS,
+                "  <script>" + themeSharedSrc + CS,
                 "  <script>window.VIZ_DATA=" + vizData + ";" + CS,
                 "  <script>" + vizSrc + CS,
                 "</body>",
@@ -181,11 +211,16 @@
                 return [it && it.name, it && it.value];
             });
         } else if (kind === "radar") {
-            headers = ["指标", "数值"];
             var indicators = payload.indicators || [];
-            var values = payload.values || [];
-            rows = indicators.map(function (ind, i) {
-                return [ind && ind.name, values[i]];
+            var series = payload.series || [];
+            headers = ["指标"].concat(series.map(function(s) { return s.name; }));
+            rows = indicators.map(function (ind, indIdx) {
+                var row = [ind && ind.name];
+                series.forEach(function(s) {
+                    var seriesData = s.data && s.data[0] && s.data[0].value;
+                    row.push(seriesData && seriesData[indIdx] != null ? seriesData[indIdx] : "—");
+                });
+                return row;
             });
         } else if (kind === "gauge") {
             headers = ["指标", "值"];
@@ -254,7 +289,7 @@
                 var v = cell == null || cell === "" ? "—" : cell;
                 var style = idx === 0 ? ' style="font-weight:600;"' : '';
                 if (idx === 0 && headers[0] === "X") {
-                    style = ' style="font-weight:500;color:' + (dark ? '#94a3b8' : '#64748b') + ';"';
+                    style = ' style="font-weight:500;color:' + mutedTextColor + ';"';
                 }
                 if (idx === 0 && (headers[0] === "来源" || headers[0] === "名称" || headers[0] === (payload.xName || "X"))) {
                     style = ' style="font-weight:600;"';
@@ -264,7 +299,7 @@
             html += '</tr>';
         });
         if (rows.length === 0) {
-            html += '<tr><td colspan="' + Math.max(1, headers.length) + '" style="text-align:center;color:' + (dark ? '#94a3b8' : '#64748b') + ';">暂无可展示数据</td></tr>';
+            html += '<tr><td colspan="' + Math.max(1, headers.length) + '" style="text-align:center;color:' + mutedTextColor + ';">暂无可展示数据</td></tr>';
         }
         html += '</tbody></table></div></div>';
         return html;
@@ -272,11 +307,12 @@
 
     const baseOption = {
         backgroundColor: "transparent",
+        color: themeProfile.palette,
         title: Object.assign({
             left: 10,
             top: titleTop,
-            textStyle: { fontSize: 16, fontWeight: 700 },
-            subtextStyle: { fontSize: 11, color: "#64748b" }
+            textStyle: { fontSize: 16, fontWeight: 700, color: dark ? "#e2e8f0" : themeProfile.titleColor },
+            subtextStyle: { fontSize: 11, color: dark ? "#94a3b8" : themeProfile.subtitleColor }
         }, titleData),
         animationDuration: 500,
         animationDurationUpdate: 700,
@@ -340,12 +376,6 @@
                         title: "下载 HTML",
                         icon: "path://M9.4 16.6L4.8 12l4.6-4.6L8 6l-6 6 6 6 1.4-1.4zm5.2 0l4.6-4.6-4.6-4.6L16 6l6 6-6 6-1.4-1.4z",
                         onclick: function () { exportHTML(); }
-                    },
-                    myFullscreen: {
-                        show: true,
-                        title: "全屏显示",
-                        icon: "path://M3 3h7v2H5v5H3V3zm18 0v7h-2V5h-5V3h7zM3 21v-7h2v5h5v2H3zm18-7v7h-7v-2h5v-5h2z",
-                        onclick: function () { toggleVizFullscreen(); }
                     }
                 };
                 features.dataZoom = {
@@ -372,9 +402,9 @@
                 return features;
             })()
         },
-        grid: { left: 54, right: 30, top: gridTop, bottom: 56 },
+        grid: { left: 12, right: 12, top: gridTop, bottom: 56, containLabel: true },
         tooltip: { trigger: "axis" },
-        legend: { top: legendTop, left: 10, right: 260, type: "scroll" },
+        legend: { top: legendTop, left: 10, right: 200, type: "scroll" },
         axisPointer: { link: [{ xAxisIndex: "all" }] },
         dataZoom: [],
         xAxis: undefined,
@@ -385,7 +415,7 @@
 
     if (kind === "pie" || kind === "donut") {
         baseOption.tooltip = { trigger: "item" };
-        baseOption.legend = { top: legendTop, left: 10, right: 260, type: "scroll" };
+        baseOption.legend = { top: legendTop, left: 10, right: 200, type: "scroll" };
         baseOption.series = [
             {
                 name: payload.seriesName || "Series 1",
@@ -454,25 +484,38 @@
         ];
     } else if (kind === "radar") {
         baseOption.tooltip = { trigger: "item" };
-        baseOption.legend = { show: false };
         baseOption.radar = {
             radius: "58%",
             center: ["50%", "61%"],
             indicator: payload.indicators || []
         };
-        baseOption.series = [
-            {
-                name: payload.seriesName || "Series 1",
-                type: "radar",
-                data: [
-                    {
-                        name: payload.seriesName || "Series 1",
-                        value: payload.values || []
-                    }
-                ],
-                areaStyle: { opacity: 0.16 }
-            }
-        ];
+        var radarSeries = payload.series || [];
+        if (radarSeries.length > 0) {
+            baseOption.legend = { show: true, top: 10, left: 10 };
+            baseOption.series = radarSeries.map(function(s) {
+                return {
+                    name: s.name || "Series",
+                    type: "radar",
+                    data: s.data || [],
+                    areaStyle: { opacity: 0.16 }
+                };
+            });
+        } else {
+            baseOption.legend = { show: false };
+            baseOption.series = [
+                {
+                    name: payload.seriesName || "Series 1",
+                    type: "radar",
+                    data: [
+                        {
+                            name: payload.seriesName || "Series 1",
+                            value: payload.values || []
+                        }
+                    ],
+                    areaStyle: { opacity: 0.16 }
+                }
+            ];
+        }
     } else if (kind === "gauge") {
         baseOption.tooltip = { trigger: "item", formatter: "{a}<br/>{b}: {c}" };
         baseOption.series = [
@@ -528,13 +571,13 @@
             left: 10,
             top: 10,
             textStyle: { fontSize: 15, fontWeight: 700 },
-            subtextStyle: { fontSize: 11, color: "#6b7280" }
+            subtextStyle: { fontSize: 11, color: dark ? "#94a3b8" : themeProfile.subtitleColor }
         });
         baseOption.tooltip = { trigger: "item" };
         baseOption.legend = {
             top: legendTop,
             left: 10,
-            right: 260,
+            right: 200,
             type: "scroll",
             itemWidth: 28,
             itemHeight: 18,
@@ -698,12 +741,71 @@
     }
 
     chart.setOption(baseOption);
+    
+    function syncVizHeight() {
+        if (!node || !vizPanel) return;
+        if (layoutUtils) {
+            layoutUtils.syncChartHeight(vizPanel, node, { minHeight: 420, viewportBottomGap: 14 });
+            return;
+        }
+        var style = window.getComputedStyle(vizPanel);
+        var padTop = parseFloat(style.paddingTop) || 0;
+        var padBottom = parseFloat(style.paddingBottom) || 0;
+        var titleRow = vizPanel.querySelector(".panel-title-row");
+        var titleH = titleRow ? titleRow.offsetHeight : 52;
+        var panelTop = vizPanel.getBoundingClientRect().top;
+        var height = isFullscreenActive()
+            ? (window.innerHeight - titleH - padTop - padBottom)
+            : (window.innerHeight - panelTop - 14 - titleH - padTop - padBottom);
+        node.style.height = Math.max(420, Math.floor(height)) + "px";
+    }
+
+    function refreshVizLayout() {
+        syncVizHeight();
+        chart.resize();
+    }
+
+    function scheduleInitialVizLayout() {
+        requestAnimationFrame(function () {
+            refreshVizLayout();
+            requestAnimationFrame(function () { refreshVizLayout(); });
+        });
+
+        [80, 220, 420].forEach(function (delay) {
+            setTimeout(refreshVizLayout, delay);
+        });
+
+        window.addEventListener("load", function () {
+            refreshVizLayout();
+            setTimeout(refreshVizLayout, 120);
+        }, { once: true });
+    }
+
+    syncVizHeight();
+    requestAnimationFrame(function () { chart.resize(); });
+    scheduleInitialVizLayout();
+
+    const vizFullscreenBtn = document.getElementById("vizFullscreenBtn");
+    if (vizFullscreenBtn) {
+        vizFullscreenBtn.addEventListener("click", toggleVizFullscreen);
+    }
+    
+    if (typeof ResizeObserver !== "undefined") {
+        new ResizeObserver(function () {
+            refreshVizLayout();
+        }).observe(node);
+    } else {
+        window.addEventListener("resize", function () {
+            refreshVizLayout();
+        });
+    }
+    // Fullscreen layout is async, so sync height first and resize on next frame.
     ["fullscreenchange", "webkitfullscreenchange", "mozfullscreenchange", "MSFullscreenChange"].forEach(function (evt) {
         document.addEventListener(evt, function () {
-            setTimeout(function () { chart.resize(); }, 120);
+            syncVizHeight();
+            requestAnimationFrame(function () {
+                requestAnimationFrame(function () { chart.resize(); });
+            });
         });
-    });
-    window.addEventListener("resize", function () {
-        chart.resize();
     });
 })();

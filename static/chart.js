@@ -4,6 +4,24 @@
   const stats = payload.stats || {};
   const options = payload.options || {};
   const selectedTheme = String(options.chartTheme || "default").toLowerCase();
+  const themeShared = window.EChartsThemeShared;
+  const themeProfile = themeShared
+    ? themeShared.getThemeProfile(selectedTheme)
+    : {
+      name: "default",
+      palette: ["#c23531", "#2f4554", "#61a0a8", "#d48265", "#91c7ae", "#749f83", "#ca8622", "#bda29a", "#6e7074", "#546570", "#c4ccd3"],
+      backgroundColor: "rgba(0,0,0,0)",
+      titleColor: "#333333",
+      subtitleColor: "#aaa",
+      textColor: "#333",
+      axisLineColor: "#333",
+      axisLabelColor: "#333",
+      splitLineColor: "#ccc",
+      toolboxColor: "#999999",
+      toolboxEmphasisColor: "#666666",
+      tooltipAxisColor: "#cccccc",
+      isDark: false
+    };
 
   const setText = (id, v) => {
     const node = document.getElementById(id);
@@ -21,16 +39,7 @@
     planTotalWrap.style.display = stats.hasPlanTotalDuration ? "block" : "none";
   }
 
-  const paletteByTheme = {
-    default: ["#006d77", "#ff8f00", "#2e7d32", "#ad1457", "#5d4037", "#1976d2", "#6a1b9a"],
-    macarons: ["#2ec7c9", "#b6a2de", "#5ab1ef", "#ffb980", "#d87a80", "#8d98b3", "#e5cf0d"],
-    infographic: ["#c1232b", "#27727b", "#fcce10", "#e87c25", "#b5c334", "#fe8463", "#9bca63"],
-    shine: ["#c12e34", "#e6b600", "#0098d9", "#2b821d", "#005eaa", "#339ca8", "#cda819"],
-    roma: ["#e01f54", "#001852", "#f5e8c8", "#b8d2c7", "#c6b38e", "#a4d8c2", "#f3d999"],
-    vintage: ["#d87c7c", "#919e8b", "#d7ab82", "#6e7074", "#61a0a8", "#efa18d", "#787464"],
-    dark: ["#4dd0e1", "#ffb74d", "#81c784", "#f06292", "#a1887f", "#64b5f6", "#ba68c8"]
-  };
-  const palette = paletteByTheme[selectedTheme] || paletteByTheme.default;
+  const palette = themeProfile.palette;
   const ganttPanel = document.getElementById("ganttPanel");
   const fullscreenBtn = document.getElementById("ganttFullscreenBtn");
   const groups = [...new Set(tasks.map((t) => t.colorGroup || t.project || "未分组"))];
@@ -68,17 +77,17 @@
 
   const DAY_MS = 24 * 3600 * 1000;
   const granularity = options.timeGranularity || "month";
-  const chartTheme = selectedTheme;
-  const echartsTheme = chartTheme === "default" ? null : chartTheme;
-  const dark = !!options.darkTheme || chartTheme === "dark";
+  const chartTheme = themeProfile.name;
+  const echartsTheme = themeShared ? themeShared.getEchartsThemeName(chartTheme) : (chartTheme === "default" ? null : chartTheme);
+  const dark = !!options.darkTheme || !!themeProfile.isDark;
   const surfaceTheme = {
     panelBg: dark ? "rgba(15,23,42,0.96)" : "rgba(255,255,255,0.98)",
-    panelBorder: dark ? "rgba(148,163,184,0.30)" : "#d6deea",
-    panelText: dark ? "#e2e8f0" : "#1e2d41",
-    panelMuted: dark ? "#94a3b8" : "#64748b",
+    panelBorder: dark ? "rgba(148,163,184,0.30)" : themeProfile.splitLineColor,
+    panelText: dark ? "#e2e8f0" : themeProfile.textColor,
+    panelMuted: dark ? "#94a3b8" : themeProfile.subtitleColor,
     panelShadow: dark ? "0 14px 28px rgba(2,8,23,0.34)" : "0 12px 24px rgba(15,23,42,0.16)",
     toolHintBg: dark ? "rgba(15,23,42,0.92)" : "rgba(255,255,255,0.94)",
-    toolHintText: dark ? "#e2e8f0" : "#1e2d41"
+    toolHintText: dark ? "#e2e8f0" : themeProfile.textColor
   };
 
   function escapeHtml(value) {
@@ -141,32 +150,37 @@
   const timeGridCfg = timeGridByGranularity[granularity] || timeGridByGranularity.month;
 
   const gantt = echarts.init(document.getElementById("gantt"), echartsTheme);
-  const canvasBgByTheme = {
-    default: dark ? "#10213b" : "#ffffff",
-    macarons: dark ? "#1e2733" : "#fff7fb",
-    infographic: dark ? "#18222b" : "#fffdf5",
-    shine: dark ? "#122533" : "#f9fcff",
-    roma: dark ? "#1d2026" : "#fffaf0",
-    vintage: dark ? "#25211f" : "#f7f1e6",
-    dark: "#10213b"
-  };
+  const canvasBg = dark ? "#10213b" : (themeProfile.backgroundColor || "#ffffff");
   const milestoneColor = palette[Math.max(0, palette.length - 1)] || "#c62828";
   const nowTs = Date.now();
+  const layoutUtils = window.ChartLayoutUtils;
 
   function isFullscreenActive() {
-    return document.fullscreenElement === ganttPanel
-      || document.webkitFullscreenElement === ganttPanel
-      || document.mozFullScreenElement === ganttPanel
-      || document.msFullscreenElement === ganttPanel;
+    return layoutUtils
+      ? layoutUtils.isPanelFullscreen(ganttPanel)
+      : (document.fullscreenElement === ganttPanel
+        || document.webkitFullscreenElement === ganttPanel
+        || document.mozFullScreenElement === ganttPanel
+        || document.msFullscreenElement === ganttPanel);
   }
 
   function updateFullscreenButtonText() {
     if (!fullscreenBtn) return;
-    fullscreenBtn.textContent = isFullscreenActive() ? "退出全屏" : "全屏";
+    var isFs = isFullscreenActive();
+    var icon = fullscreenBtn.querySelector("i");
+    if (icon) {
+      icon.className = isFs ? "bi bi-fullscreen-exit" : "bi bi-fullscreen";
+    }
+    fullscreenBtn.title = isFs ? "退出全屏" : "全屏查看";
+    fullscreenBtn.setAttribute("aria-label", isFs ? "退出全屏" : "全屏查看");
   }
 
   function toggleGanttFullscreen() {
     if (!ganttPanel) return;
+    if (layoutUtils) {
+      layoutUtils.togglePanelFullscreen(ganttPanel);
+      return;
+    }
     if (isFullscreenActive()) {
       if (document.exitFullscreen) {
         document.exitFullscreen();
@@ -448,8 +462,8 @@
   const chartOption = {
     animationDuration: 700,
     color: palette,
-    backgroundColor: canvasBgByTheme[chartTheme] || (dark ? "#10213b" : "#ffffff"),
-    grid: { left: 10, right: 20, top: 44, bottom: 44, containLabel: true },
+    backgroundColor: canvasBg,
+    grid: { left: 10, right: 20, top: 44, bottom: 80, containLabel: true },
     toolbox: {
       show: true,
       right: 14,
@@ -458,13 +472,13 @@
       itemGap: 12,
       iconStyle: {
         color: "none",
-        borderColor: dark ? "#94a3b8" : "#64748b",
+        borderColor: dark ? "#94a3b8" : themeProfile.toolboxColor,
         borderWidth: 1.5
       },
       emphasis: {
         iconStyle: {
           color: dark ? "rgba(255,255,255,0.10)" : "rgba(15,23,42,0.06)",
-          borderColor: dark ? "#e2e8f0" : "#1e293b",
+          borderColor: dark ? "#e2e8f0" : themeProfile.toolboxEmphasisColor,
           borderWidth: 2,
           shadowBlur: 6,
           shadowColor: dark ? "rgba(255,255,255,0.18)" : "rgba(15,23,42,0.15)",
@@ -497,8 +511,8 @@
           readOnly: true,
           backgroundColor: dark ? "#0f172a" : "#f8fbff",
           textareaColor: dark ? "#0f172a" : "#ffffff",
-          textareaBorderColor: dark ? "rgba(148,163,184,0.24)" : "#d6deea",
-          textColor: dark ? "#e2e8f0" : "#1e2d41",
+          textareaBorderColor: dark ? "rgba(148,163,184,0.24)" : themeProfile.splitLineColor,
+          textColor: dark ? "#e2e8f0" : themeProfile.textColor,
           buttonColor: "#2563eb",
           buttonTextColor: "#ffffff",
           optionToContent: function () {
@@ -539,7 +553,7 @@
           title: "下载 PNG",
           name: "gantt",
           pixelRatio: 2,
-          backgroundColor: canvasBgByTheme[chartTheme] || (dark ? "#10213b" : "#ffffff")
+          backgroundColor: canvasBg
         },
         mySaveSVG: {
           show: true,
@@ -560,12 +574,6 @@
           onclick: function () {
             gantt.dispatchAction({ type: "dataZoom", start: 0, end: 100 });
           }
-        },
-        myFullscreen: {
-          show: true,
-          title: "全屏显示",
-          icon: "path://M3 3h7v2H5v5H3V3zm18 0v7h-2V5h-5V3h7zM3 21v-7h2v5h5v2H3zm18-7v7h-7v-2h5v-5h2z",
-          onclick: function () { toggleGanttFullscreen(); }
         }
       }
     },
@@ -578,7 +586,7 @@
       interval: timeGridCfg.interval || undefined,
       axisLabel: {
         formatter: axisLabelFormatter,
-        color: dark ? "#d8e0ea" : "#334155",
+        color: dark ? "#d8e0ea" : themeProfile.axisLabelColor,
         showMinLabel: true,
         showMaxLabel: true,
         alignMinLabel: "left",
@@ -588,10 +596,10 @@
         margin: 14
       },
       axisTick: { show: true },
-      axisLine: { show: true, lineStyle: { color: dark ? "rgba(255,255,255,0.22)" : "#c8d4e2" } },
+      axisLine: { show: true, lineStyle: { color: dark ? "rgba(255,255,255,0.22)" : themeProfile.axisLineColor } },
       splitLine: {
         show: true,
-        lineStyle: { color: dark ? "rgba(255,255,255,0.12)" : "#dbe6f3", width: 1 }
+        lineStyle: { color: dark ? "rgba(255,255,255,0.12)" : themeProfile.splitLineColor, width: 1 }
       },
       minorTick: {
         show: timeGridCfg.showMinor,
@@ -613,11 +621,11 @@
         }
       },
       axisLabel: {
-        color: dark ? "#d8e0ea" : "#334155",
+        color: dark ? "#d8e0ea" : themeProfile.axisLabelColor,
         width: 150,
         overflow: "truncate"
       },
-      axisLine: { show: true, lineStyle: { color: dark ? "rgba(255,255,255,0.18)" : "#c8d4e2" } }
+      axisLine: { show: true, lineStyle: { color: dark ? "rgba(255,255,255,0.18)" : themeProfile.axisLineColor } }
     },
     tooltip: {
       show: true,
@@ -772,7 +780,83 @@
     ]
   };
 
+  chartOption.dataZoom = [
+    {
+      type: "slider",
+      xAxisIndex: 0,
+      start: 0,
+      end: 100,
+      height: 22,
+      bottom: 14,
+      borderColor: dark ? "rgba(148,163,184,0.30)" : "#d6deea",
+      backgroundColor: dark ? "rgba(255,255,255,0.04)" : "rgba(230,238,250,0.60)",
+      fillerColor: dark ? "rgba(99,179,237,0.18)" : "rgba(59,130,246,0.12)",
+      handleStyle: {
+        color: dark ? "#63b3ed" : "#3b82f6",
+        borderColor: dark ? "#63b3ed" : "#3b82f6"
+      },
+      moveHandleStyle: { color: dark ? "#94a3b8" : "#94a3b8" },
+      labelFormatter: function (v) {
+        var d = new Date(v);
+        return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+      },
+      textStyle: { color: dark ? "#94a3b8" : "#64748b", fontSize: 11 }
+    },
+    {
+      type: "inside",
+      xAxisIndex: 0,
+      start: 0,
+      end: 100,
+      zoomOnMouseWheel: true,
+      moveOnMouseMove: false
+    }
+  ];
+
   gantt.setOption(chartOption);
+
+  function syncGanttHeight() {
+    var ganttEl = document.getElementById("gantt");
+    if (!ganttEl || !ganttPanel) return;
+    if (layoutUtils) {
+      layoutUtils.syncChartHeight(ganttPanel, ganttEl, { minHeight: 420, viewportBottomGap: 14 });
+      return;
+    }
+    var style = window.getComputedStyle(ganttPanel);
+    var padTop = parseFloat(style.paddingTop) || 0;
+    var padBottom = parseFloat(style.paddingBottom) || 0;
+    var titleRow = ganttPanel.querySelector(".panel-title-row");
+    var titleH = titleRow ? titleRow.offsetHeight : 52;
+    var panelTop = ganttPanel.getBoundingClientRect().top;
+    var height = isFullscreenActive()
+      ? (window.innerHeight - titleH - padTop - padBottom)
+      : (window.innerHeight - panelTop - 14 - titleH - padTop - padBottom);
+    ganttEl.style.height = Math.max(420, Math.floor(height)) + "px";
+  }
+
+  function refreshGanttLayout() {
+    syncGanttHeight();
+    gantt.resize();
+  }
+
+  function scheduleInitialGanttLayout() {
+    requestAnimationFrame(function () {
+      refreshGanttLayout();
+      requestAnimationFrame(function () { refreshGanttLayout(); });
+    });
+
+    [80, 220, 420].forEach(function (delay) {
+      setTimeout(refreshGanttLayout, delay);
+    });
+
+    window.addEventListener("load", function () {
+      refreshGanttLayout();
+      setTimeout(refreshGanttLayout, 120);
+    }, { once: true });
+  }
+
+  syncGanttHeight();
+  requestAnimationFrame(function () { gantt.resize(); });
+  scheduleInitialGanttLayout();
 
   if (fullscreenBtn) {
     fullscreenBtn.addEventListener("click", toggleGanttFullscreen);
@@ -780,7 +864,10 @@
   ["fullscreenchange", "webkitfullscreenchange", "mozfullscreenchange", "MSFullscreenChange"].forEach(function (evt) {
     document.addEventListener(evt, function () {
       updateFullscreenButtonText();
-      setTimeout(function () { gantt.resize(); }, 120);
+      syncGanttHeight();
+      requestAnimationFrame(function () {
+        requestAnimationFrame(function () { gantt.resize(); });
+      });
     });
   });
   updateFullscreenButtonText();
@@ -842,13 +929,15 @@
     var CS = "</" + "script>";
 
     Promise.all([
+      fetch("/static/echarts_theme_shared.js").then(function (r) { return r.text(); }),
       fetch("/static/chart.js").then(function (r) { return r.text(); }),
       fetch("https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js").then(function (r) { return r.text(); })
     ]).then(function (results) {
       // Sanitize: replace </script → <\/script so embedded sources cannot close
       // the outer <script> block in the generated HTML file.
-      var chartSrc = results[0].replace(/<\/script/gi, "<\\/script");
-      var echartsSrc = results[1].replace(/<\/script/gi, "<\\/script");
+      var themeSharedSrc = results[0].replace(/<\/script/gi, "<\\/script");
+      var chartSrc = results[1].replace(/<\/script/gi, "<\\/script");
+      var echartsSrc = results[2].replace(/<\/script/gi, "<\\/script");
       var data = JSON.stringify(window.GANTT_DATA, null, 2);
 
       var html = [
@@ -863,6 +952,7 @@
         "<body>",
         "  <div id=\"gantt\"></div>",
         "  <script>" + echartsSrc + CS,
+        "  <script>" + themeSharedSrc + CS,
         "  <script>window.GANTT_DATA=" + data + ";" + CS,
         "  <script>" + chartSrc + CS,
         "</body>",
@@ -884,12 +974,12 @@
   if (typeof ResizeObserver !== "undefined") {
     const host = document.getElementById("gantt");
     const ro = new ResizeObserver(function () {
-      gantt.resize();
+      refreshGanttLayout();
     });
     ro.observe(host);
   }
 
   window.addEventListener("resize", function () {
-    gantt.resize();
+    refreshGanttLayout();
   });
 })();

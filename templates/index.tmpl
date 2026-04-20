@@ -209,6 +209,13 @@
                 <option value="roma" {{if eq .Options.ChartTheme "roma"}}selected{{end}}>Roma</option>
                 <option value="vintage" {{if eq .Options.ChartTheme "vintage"}}selected{{end}}>Vintage</option>
                 <option value="dark" {{if eq .Options.ChartTheme "dark"}}selected{{end}}>Dark</option>
+                <option value="westeros" {{if eq .Options.ChartTheme "westeros"}}selected{{end}}>Westeros</option>
+                <option value="essos" {{if eq .Options.ChartTheme "essos"}}selected{{end}}>Essos</option>
+                <option value="wonderland" {{if eq .Options.ChartTheme "wonderland"}}selected{{end}}>Wonderland</option>
+                <option value="walden" {{if eq .Options.ChartTheme "walden"}}selected{{end}}>Walden</option>
+                <option value="chalk" {{if eq .Options.ChartTheme "chalk"}}selected{{end}}>Chalk</option>
+                <option value="halloween" {{if eq .Options.ChartTheme "halloween"}}selected{{end}}>Halloween</option>
+                <option value="purple-passion" {{if eq .Options.ChartTheme "purple-passion"}}selected{{end}}>Purple Passion</option>
               </select>
             </label>
 
@@ -296,8 +303,8 @@
             <h3 class="panel-title mb-0"><i class="bi bi-bar-chart-line me-1"></i>任务甘特图</h3>
             <p class="panel-subtitle mb-0">查看任务周期、计划基准、里程碑与当前时间线，便于整体排期对比</p>
           </div>
-          <button id="btnFullscreen" class="btn-fs-overlay" title="全屏查看">
-            <i class="bi bi-fullscreen" id="fsIcon"></i>
+          <button type="button" id="ganttFullscreenBtn" class="btn-fs-overlay" title="全屏查看" aria-label="全屏查看">
+            <i class="bi bi-fullscreen"></i>
           </button>
         </div>
         <div id="gantt" class="chart chart-lg"></div>
@@ -310,41 +317,12 @@
           options: {{.OptionsJSON}}
         };
       </script>
+      <script src="/static/echarts_theme_shared.js"></script>
+      <script src="/static/chart_layout.js"></script>
       <script src="/static/chart.js"></script>
       {{end}}
     </main>
   </div>
-
-  <script>
-    /* ── 全屏控制 ──────────────────────────────────────── */
-    (function () {
-      var panel = document.getElementById("ganttPanel");
-      var btn   = document.getElementById("btnFullscreen");
-      var icon  = document.getElementById("fsIcon");
-      if (!panel || !btn) return;
-
-      function updateIcon() {
-        var isFs = !!(document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement);
-        icon.className = isFs ? "bi bi-fullscreen-exit" : "bi bi-fullscreen";
-        btn.title = isFs ? "退出全屏" : "全屏查看";
-        /* 通知 ECharts 重新适应尺寸 */
-        setTimeout(function () { window.dispatchEvent(new Event("resize")); }, 80);
-      }
-
-      btn.addEventListener("click", function () {
-        var isFs = !!(document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement);
-        if (!isFs) {
-          (panel.requestFullscreen || panel.webkitRequestFullscreen || panel.mozRequestFullScreen).call(panel);
-        } else {
-          (document.exitFullscreen || document.webkitExitFullscreen || document.mozCancelFullScreen).call(document);
-        }
-      });
-
-      document.addEventListener("fullscreenchange", updateIcon);
-      document.addEventListener("webkitfullscreenchange", updateIcon);
-      document.addEventListener("mozfullscreenchange", updateIcon);
-    })();
-  </script>
 
   <script>
     (function () {
