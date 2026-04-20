@@ -141,6 +141,10 @@
                   <input class="form-check-input" type="checkbox" id="chk_smooth" name="smooth_line" {{if index $cfg "SmoothLine"}}checked{{end}} />
                   <label class="form-check-label" for="chk_smooth">平滑折线</label>
                 </div>
+                <div class="form-check mapping-check" data-field="axis_swap">
+                  <input class="form-check-input" type="checkbox" id="chk_axis_swap" name="axis_swap" {{if index $cfg "SwapAxis"}}checked{{end}} />
+                  <label class="form-check-label" for="chk_axis_swap">X/Y 轴互换（横向柱状图）</label>
+                </div>
                 <div class="form-check mapping-check" data-field="aggregate_by_name">
                   <input class="form-check-input" type="checkbox" id="chk_agg" name="aggregate_by_name" {{if index $cfg "AggregateByName"}}checked{{end}} />
                   <label class="form-check-label" for="chk_agg">同名称聚合（饼图/漏斗）</label>
@@ -530,7 +534,7 @@
 
       var allFields = [
         'title_text', 'subtitle_text', 'series_name', 'series2_name', 'series3_name',
-        'smooth_line', 'aggregate_by_name', 'sort_mode',
+        'smooth_line', 'axis_swap', 'aggregate_by_name', 'sort_mode',
         'x_col', 'y_col', 'y2_col', 'y3_col', 'y_metric_count', 'size_col',
         'name_col', 'value_col', 'value2_col', 'gauge_mode',
         'source_col', 'target_col', 'link_value_col',
@@ -545,6 +549,7 @@
         series2_name: '系列2名称',
         series3_name: '系列3名称',
         smooth_line: '平滑折线',
+        axis_swap: 'X/Y轴互换',
         aggregate_by_name: '同名称聚合',
         sort_mode: '排序方式',
         x_col: 'X轴列',
@@ -569,7 +574,7 @@
       var chartRules = {
         bar: {
           required: ['x_col', 'y_col'],
-          optional: ['y2_col', 'y3_col', 'y_metric_count', 'sort_mode', 'series2_name', 'series3_name']
+          optional: ['y2_col', 'y3_col', 'y_metric_count', 'sort_mode', 'series2_name', 'series3_name', 'axis_swap']
         },
         line: {
           required: ['x_col', 'y_col'],
@@ -581,7 +586,7 @@
         },
         stack_bar: {
           required: ['x_col', 'y_col'],
-          optional: ['y2_col', 'y3_col', 'y_metric_count', 'sort_mode', 'series2_name', 'series3_name']
+          optional: ['y2_col', 'y3_col', 'y_metric_count', 'sort_mode', 'series2_name', 'series3_name', 'axis_swap']
         },
         stack_area: {
           required: ['x_col', 'y_col'],

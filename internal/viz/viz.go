@@ -31,6 +31,7 @@ type Config struct {
 	ValueCol        string
 	Value2Col       string
 	SizeCol         string
+	SwapAxis        bool
 	SmoothLine      bool
 	SortMode        string
 	AggregateByName bool
@@ -169,6 +170,9 @@ func Merge(base, override Config) Config {
 	assign(&out.ValueCol, override.ValueCol)
 	assign(&out.Value2Col, override.Value2Col)
 	assign(&out.SizeCol, override.SizeCol)
+	if override.SwapAxis {
+		out.SwapAxis = true
+	}
 	assign(&out.SortMode, override.SortMode)
 	assign(&out.GaugeMode, override.GaugeMode)
 	assign(&out.SourceCol, override.SourceCol)
@@ -234,6 +238,7 @@ func ToMap(cfg Config) map[string]any {
 		"ValueCol":        cfg.ValueCol,
 		"Value2Col":       cfg.Value2Col,
 		"SizeCol":         cfg.SizeCol,
+		"SwapAxis":        cfg.SwapAxis,
 		"SmoothLine":      cfg.SmoothLine,
 		"SortMode":        cfg.SortMode,
 		"AggregateByName": cfg.AggregateByName,
@@ -432,10 +437,11 @@ func buildCartesian(dataset model.Dataset, cfg Config) (map[string]any, error) {
 	}
 
 	return map[string]any{
-		"kind":   cfg.ChartKind,
-		"title":  map[string]any{"text": cfg.Title, "subtext": cfg.SubTitle},
-		"xAxis":  xAxis,
-		"series": seriesDefs,
+		"kind":     cfg.ChartKind,
+		"title":    map[string]any{"text": cfg.Title, "subtext": cfg.SubTitle},
+		"xAxis":    xAxis,
+		"series":   seriesDefs,
+		"swapAxis": cfg.SwapAxis,
 	}, nil
 }
 

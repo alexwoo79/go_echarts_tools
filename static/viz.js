@@ -156,6 +156,120 @@
         });
     }
 
+    function escapeHtml(value) {
+        return String(value == null ? "" : value)
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/\"/g, "&quot;")
+            .replace(/'/g, "&#39;");
+    }
+
+    function buildDataViewTable() {
+        var headers = [];
+        var rows = [];
+
+        if (kind === "scatter") {
+            headers = [payload.xName || "X", payload.yName || "Y", payload.sizeName || "Size"];
+            rows = (payload.points || []).map(function (p) {
+                var v = Array.isArray(p && p.value) ? p.value : (Array.isArray(p) ? p : []);
+                return [v[0], v[1], v[2]];
+            });
+        } else if (kind === "pie" || kind === "donut" || kind === "funnel") {
+            headers = ["名称", "数值"];
+            rows = (payload.items || []).map(function (it) {
+                return [it && it.name, it && it.value];
+            });
+        } else if (kind === "radar") {
+            headers = ["指标", "数值"];
+            var indicators = payload.indicators || [];
+            var values = payload.values || [];
+            rows = indicators.map(function (ind, i) {
+                return [ind && ind.name, values[i]];
+            });
+        } else if (kind === "gauge") {
+            headers = ["指标", "值"];
+            rows = [
+                [payload.seriesName || "Series", payload.value],
+                ["最大值", payload.max]
+            ];
+        } else if (kind === "sankey" || kind === "graph" || kind === "chord") {
+            headers = ["来源", "目标", "权重"];
+            rows = (payload.links || []).map(function (l) {
+                return [l && l.source, l && l.target, l && l.value];
+            });
+        } else if (kind === "tree" || kind === "treemap") {
+            headers = ["名称", "值", "子节点数"];
+            var list = [];
+            function walk(node) {
+                if (!node || typeof node !== "object") return;
+                var children = Array.isArray(node.children) ? node.children : [];
+                list.push([node.name, node.value, children.length]);
+                children.forEach(walk);
+            }
+            if (payload.tree) {
+                walk(payload.tree);
+            }
+            rows = list;
+        } else {
+            var xAxis = payload.xAxis || [];
+            var seriesDefs = payload.series || [];
+            headers = ["X"].concat(seriesDefs.map(function (s) { return (s && s.name) || "Series"; }));
+            rows = xAxis.map(function (x, i) {
+                var row = [x];
+                seriesDefs.forEach(function (s) {
+                    var d = Array.isArray(s && s.data) ? s.data : [];
+                    var val = d[i];
+                    if (val && typeof val === "object" && Object.prototype.hasOwnProperty.call(val, "value")) {
+                        val = val.value;
+                    }
+                    row.push(val);
+                });
+                return row;
+            });
+        }
+
+        return { headers: headers, rows: rows };
+    }
+
+    function buildDataViewContent() {
+        var table = buildDataViewTable();
+        var headers = table.headers || [];
+        var rows = table.rows || [];
+        var html = '<div class="data-view-surface' + (dark ? ' data-view-dark' : '') + '">';
+        html += '<div class="data-view-head">';
+        html += '<h3 class="data-view-title">数据预览</h3>';
+        html += '<div class="data-view-meta">共 ' + rows.length + ' 条记录</div>';
+        html += '</div>';
+        html += '<div class="data-view-wrap">';
+        html += '<table class="preview-table">';
+        html += '<thead><tr>';
+        headers.forEach(function (h) {
+            html += '<th>' + escapeHtml(h) + '</th>';
+        });
+        html += '</tr></thead><tbody>';
+        rows.forEach(function (r, i) {
+            html += '<tr>';
+            r.forEach(function (cell, idx) {
+                var v = cell == null || cell === "" ? "—" : cell;
+                var style = idx === 0 ? ' style="font-weight:600;"' : '';
+                if (idx === 0 && headers[0] === "X") {
+                    style = ' style="font-weight:500;color:' + (dark ? '#94a3b8' : '#64748b') + ';"';
+                }
+                if (idx === 0 && (headers[0] === "来源" || headers[0] === "名称" || headers[0] === (payload.xName || "X"))) {
+                    style = ' style="font-weight:600;"';
+                }
+                html += '<td' + style + ' title="' + escapeHtml(v) + '">' + escapeHtml(v) + '</td>';
+            });
+            html += '</tr>';
+        });
+        if (rows.length === 0) {
+            html += '<tr><td colspan="' + Math.max(1, headers.length) + '" style="text-align:center;color:' + (dark ? '#94a3b8' : '#64748b') + ';">暂无可展示数据</td></tr>';
+        }
+        html += '</tbody></table></div></div>';
+        return html;
+    }
+
     const baseOption = {
         backgroundColor: "transparent",
         title: Object.assign({
@@ -197,8 +311,17 @@
                     restore: { title: "还原" },
                     dataView: {
                         title: "数据视图",
+                        lang: ["数据视图", "关闭", "刷新"],
                         readOnly: true,
-                        lang: ["数据视图", "关闭", "刷新"]
+                        backgroundColor: dark ? "#0f172a" : "#f8fbff",
+                        textareaColor: dark ? "#0f172a" : "#ffffff",
+                        textareaBorderColor: dark ? "rgba(148,163,184,0.24)" : "#d6deea",
+                        textColor: dark ? "#e2e8f0" : "#1e2d41",
+                        buttonColor: "#2563eb",
+                        buttonTextColor: "#ffffff",
+                        optionToContent: function () {
+                            return buildDataViewContent();
+                        }
                     },
                     saveAsImage: {
                         title: "下载 PNG",
@@ -523,18 +646,35 @@
     } else {
         const seriesDefs = Array.isArray(payload.series) ? payload.series : [];
         const type = kind === "bar" || kind === "stack_bar" ? "bar" : "line";
-        baseOption.xAxis = {
-            type: "category",
-            data: payload.xAxis || [],
-            axisLabel: { interval: 0, rotate: 0 }
-        };
-        baseOption.yAxis = { type: "value" };
+        const isHorizontalBar = (kind === "bar" || kind === "stack_bar") && payload.swapAxis === true;
+        if (isHorizontalBar) {
+            baseOption.xAxis = { type: "value" };
+            baseOption.yAxis = {
+                type: "category",
+                data: payload.xAxis || [],
+                axisLabel: { interval: 0, rotate: 0 }
+            };
+        } else {
+            baseOption.xAxis = {
+                type: "category",
+                data: payload.xAxis || [],
+                axisLabel: { interval: 0, rotate: 0 }
+            };
+            baseOption.yAxis = { type: "value" };
+        }
         baseOption.tooltip = { trigger: "axis" };
         if ((payload.xAxis || []).length > 8) {
-            baseOption.dataZoom = [
-                { type: "inside", xAxisIndex: 0 },
-                { type: "slider", xAxisIndex: 0, height: 18, bottom: 14 }
-            ];
+            if (isHorizontalBar) {
+                baseOption.dataZoom = [
+                    { type: "inside", yAxisIndex: 0 },
+                    { type: "slider", yAxisIndex: 0, width: 14, right: 8 }
+                ];
+            } else {
+                baseOption.dataZoom = [
+                    { type: "inside", xAxisIndex: 0 },
+                    { type: "slider", xAxisIndex: 0, height: 18, bottom: 14 }
+                ];
+            }
         }
         baseOption.series = seriesDefs.map(function (s) {
             var rawData = Array.isArray(s.data) ? s.data : [];

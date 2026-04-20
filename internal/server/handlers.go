@@ -230,6 +230,7 @@ func (h *handlers) vizChart(c *gin.Context) {
 		ValueCol:        c.PostForm("value_col"),
 		Value2Col:       c.PostForm("value2_col"),
 		SizeCol:         c.PostForm("size_col"),
+		SwapAxis:        c.PostForm("axis_swap") == "on",
 		SmoothLine:      c.PostForm("smooth_line") == "on",
 		SortMode:        strings.TrimSpace(c.PostForm("sort_mode")),
 		AggregateByName: c.PostForm("aggregate_by_name") == "on",
